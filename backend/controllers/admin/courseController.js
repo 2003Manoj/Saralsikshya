@@ -1,318 +1,358 @@
-// import Course from "../models/Course.js"
 import Course from "../../models/Course.js"
+import User from "../../models/User.js"
+import { asyncHandler } from "../../middlewares/errorMiddleware.js"
 
-import asyncHandler from "express-async-handler"
-
-// @desc    Get all courses with filtering and search
+// @desc    Get all courses
 // @route   GET /api/courses
 // @access  Public
 export const getCourses = asyncHandler(async (req, res) => {
-  const { search, category, level, page = 1, limit = 10 } = req.query
+  const page = Number.parseInt(req.query.page) || 1
+  const limit = Number.parseInt(req.query.limit) || 10
+  const search = req.query.search || ""
+  const category = req.query.category || ""
+  const subCategory = req.query.subCategory || ""
+  const level = req.query.level || ""
+  const isActive = req.query.isActive
+  const sortBy = req.query.sortBy || "createdAt"
+  const sortOrder = req.query.sortOrder === "asc" ? 1 : -1
 
-  // Build query object
+  // Build query
   const query = {}
 
-  // Search functionality
   if (search) {
     query.$or = [
       { title: { $regex: search, $options: "i" } },
       { description: { $regex: search, $options: "i" } },
       { "instructor.name": { $regex: search, $options: "i" } },
+      { tags: { $in: [new RegExp(search, "i")] } },
     ]
   }
 
-  // Filter by category
   if (category) {
     query.category = category
   }
 
-  // Filter by level
+  if (subCategory) {
+    query.subCategory = subCategory
+  }
+
   if (level) {
     query.level = level
   }
 
-  // Only show active courses for public access
-  query.isActive = true
-
-  try {
-    const courses = await Course.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-
-    const total = await Course.countDocuments(query)
-
-    res.json({
-      success: true,
-      data: courses,
-      pagination: {
-        page: Number.parseInt(page),
-        limit: Number.parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching courses",
-      error: error.message,
-    })
+  if (isActive !== undefined) {
+    query.isActive = isActive === "true"
   }
+
+  // Execute query with pagination
+  const courses = await Course.find(query)
+    .sort({ [sortBy]: sortOrder })
+    .limit(limit * 1)
+    .skip((page - 1) * limit)
+    .populate("reviews.user", "name")
+
+  const total = await Course.countDocuments(query)
+
+  res.json({
+    success: true,
+    data: courses,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+    },
+  })
 })
 
-// @desc    Get single course by ID
+// @desc    Get single course
 // @route   GET /api/courses/:id
 // @access  Public
 export const getCourseById = asyncHandler(async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id)
+  const course = await Course.findById(req.params.id).populate("reviews.user", "name avatar")
 
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      })
-    }
-
-    res.json({
-      success: true,
-      data: course,
-    })
-  } catch (error) {
-    res.status(500).json({
+  if (!course) {
+    return res.status(404).json({
       success: false,
-      message: "Error fetching course",
-      error: error.message,
+      message: "Course not found",
     })
   }
+
+  res.json({
+    success: true,
+    data: course,
+  })
 })
 
-// @desc    Get all courses for admin (including inactive)
-// @route   GET /api/admin/courses
-// @access  Private/Admin
-export const getAdminCourses = asyncHandler(async (req, res) => {
-  const { search, category, level, page = 1, limit = 10 } = req.query
-
-  // Build query object
-  const query = {}
-
-  // Search functionality
-  if (search) {
-    query.$or = [
-      { title: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
-      { "instructor.name": { $regex: search, $options: "i" } },
-    ]
-  }
-
-  // Filter by category
-  if (category) {
-    query.category = category
-  }
-
-  // Filter by level
-  if (level) {
-    query.level = level
-  }
-
-  try {
-    const courses = await Course.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-
-    const total = await Course.countDocuments(query)
-
-    res.json({
-      success: true,
-      data: courses,
-      pagination: {
-        page: Number.parseInt(page),
-        limit: Number.parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching courses",
-      error: error.message,
-    })
-  }
-})
-
-// @desc    Create new course
-// @route   POST /api/admin/courses
+// @desc    Create course (Admin only)
+// @route   POST /api/courses
 // @access  Private/Admin
 export const createCourse = asyncHandler(async (req, res) => {
-  try {
-    const course = await Course.create(req.body)
-
-    res.status(201).json({
-      success: true,
-      message: "Course created successfully",
-      data: course,
-    })
-  } catch (error) {
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message)
-      return res.status(400).json({
-        success: false,
-        message: "Validation Error",
-        errors,
-      })
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Error creating course",
-      error: error.message,
-    })
+  const courseData = {
+    ...req.body,
+    createdBy: req.user._id,
   }
+
+  const course = await Course.create(courseData)
+
+  res.status(201).json({
+    success: true,
+    message: "Course created successfully",
+    data: course,
+  })
 })
 
-// @desc    Update course
-// @route   PUT /api/admin/courses/:id
+// @desc    Update course (Admin only)
+// @route   PUT /api/courses/:id
 // @access  Private/Admin
 export const updateCourse = asyncHandler(async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id)
+  let course = await Course.findById(req.params.id)
 
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      })
-    }
-
-    const updatedCourse = await Course.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    })
-
-    res.json({
-      success: true,
-      message: "Course updated successfully",
-      data: updatedCourse,
-    })
-  } catch (error) {
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message)
-      return res.status(400).json({
-        success: false,
-        message: "Validation Error",
-        errors,
-      })
-    }
-
-    res.status(500).json({
+  if (!course) {
+    return res.status(404).json({
       success: false,
-      message: "Error updating course",
-      error: error.message,
+      message: "Course not found",
     })
   }
+
+  // Update course
+  course = await Course.findByIdAndUpdate(
+    req.params.id,
+    { ...req.body, lastUpdated: new Date() },
+    { new: true, runValidators: true },
+  )
+
+  res.json({
+    success: true,
+    message: "Course updated successfully",
+    data: course,
+  })
 })
 
-// @desc    Delete course
-// @route   DELETE /api/admin/courses/:id
+// @desc    Delete course (Admin only)
+// @route   DELETE /api/courses/:id
 // @access  Private/Admin
 export const deleteCourse = asyncHandler(async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id)
+  const course = await Course.findById(req.params.id)
 
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      })
-    }
-
-    await Course.findByIdAndDelete(req.params.id)
-
-    res.json({
-      success: true,
-      message: "Course deleted successfully",
-    })
-  } catch (error) {
-    res.status(500).json({
+  if (!course) {
+    return res.status(404).json({
       success: false,
-      message: "Error deleting course",
-      error: error.message,
+      message: "Course not found",
     })
   }
+
+  // Check if course has enrolled students
+  const enrolledCount = await User.countDocuments({
+    "enrolledCourses.course": req.params.id,
+  })
+
+  if (enrolledCount > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cannot delete course. ${enrolledCount} students are enrolled.`,
+    })
+  }
+
+  await Course.findByIdAndDelete(req.params.id)
+
+  res.json({
+    success: true,
+    message: "Course deleted successfully",
+  })
 })
 
-// @desc    Toggle course status (active/inactive)
-// @route   PATCH /api/admin/courses/:id/status
+// @desc    Toggle course status (Admin only)
+// @route   PATCH /api/courses/:id/status
 // @access  Private/Admin
 export const toggleCourseStatus = asyncHandler(async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id)
+  const { isActive } = req.body
 
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found",
-      })
-    }
+  const course = await Course.findById(req.params.id)
 
-    course.isActive = req.body.isActive !== undefined ? req.body.isActive : !course.isActive
-
-    await course.save()
-
-    res.json({
-      success: true,
-      message: `Course ${course.isActive ? "activated" : "deactivated"} successfully`,
-      data: course,
-    })
-  } catch (error) {
-    res.status(500).json({
+  if (!course) {
+    return res.status(404).json({
       success: false,
-      message: "Error updating course status",
-      error: error.message,
+      message: "Course not found",
     })
   }
+
+  course.isActive = isActive
+  course.lastUpdated = new Date()
+  await course.save()
+
+  res.json({
+    success: true,
+    message: `Course ${isActive ? "activated" : "deactivated"} successfully`,
+    data: course,
+  })
 })
 
-// @desc    Get course statistics
-// @route   GET /api/admin/courses/stats
+// @desc    Get course categories
+// @route   GET /api/courses/categories
+// @access  Public
+export const getCategories = asyncHandler(async (req, res) => {
+  const categories = await Course.aggregate([
+    { $match: { isActive: true } },
+    {
+      $group: {
+        _id: "$category",
+        subCategories: { $addToSet: "$subCategory" },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ])
+
+  res.json({
+    success: true,
+    data: categories,
+  })
+})
+
+// @desc    Get course statistics (Admin only)
+// @route   GET /api/courses/stats
 // @access  Private/Admin
 export const getCourseStats = asyncHandler(async (req, res) => {
-  try {
-    const totalCourses = await Course.countDocuments()
-    const activeCourses = await Course.countDocuments({ isActive: true })
-    const inactiveCourses = await Course.countDocuments({ isActive: false })
+  const totalCourses = await Course.countDocuments()
+  const activeCourses = await Course.countDocuments({ isActive: true })
+  const inactiveCourses = await Course.countDocuments({ isActive: false })
 
-    const categoryStats = await Course.aggregate([
-      { $group: { _id: "$category", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ])
-
-    const levelStats = await Course.aggregate([
-      { $group: { _id: "$level", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ])
-
-    const totalEnrollments = await Course.aggregate([{ $group: { _id: null, total: { $sum: "$enrolledStudents" } } }])
-
-    res.json({
-      success: true,
-      data: {
-        totalCourses,
-        activeCourses,
-        inactiveCourses,
-        categoryStats,
-        levelStats,
-        totalEnrollments: totalEnrollments[0]?.total || 0,
+  // Get courses by category
+  const coursesByCategory = await Course.aggregate([
+    {
+      $group: {
+        _id: "$category",
+        count: { $sum: 1 },
+        totalRevenue: { $sum: "$totalRevenue" },
+        totalEnrollments: { $sum: "$enrolledStudents" },
       },
-    })
-  } catch (error) {
-    res.status(500).json({
+    },
+    { $sort: { count: -1 } },
+  ])
+
+  // Get courses by level
+  const coursesByLevel = await Course.aggregate([
+    {
+      $group: {
+        _id: "$level",
+        count: { $sum: 1 },
+      },
+    },
+  ])
+
+  // Get top performing courses
+  const topCourses = await Course.find({ isActive: true })
+    .sort({ enrolledStudents: -1, rating: -1 })
+    .limit(10)
+    .select("title instructor enrolledStudents rating totalRevenue")
+
+  // Get course creation trend (last 6 months)
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+  const courseGrowth = await Course.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: sixMonthsAgo },
+      },
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: "$createdAt" },
+          month: { $month: "$createdAt" },
+        },
+        count: { $sum: 1 },
+      },
+    },
+    {
+      $sort: { "_id.year": 1, "_id.month": 1 },
+    },
+  ])
+
+  res.json({
+    success: true,
+    stats: {
+      totalCourses,
+      activeCourses,
+      inactiveCourses,
+      coursesByCategory,
+      coursesByLevel,
+      topCourses,
+      courseGrowth,
+    },
+  })
+})
+
+// @desc    Add review to course
+// @route   POST /api/courses/:id/reviews
+// @access  Private
+export const addCourseReview = asyncHandler(async (req, res) => {
+  const { rating, comment } = req.body
+  const courseId = req.params.id
+
+  const course = await Course.findById(courseId)
+
+  if (!course) {
+    return res.status(404).json({
       success: false,
-      message: "Error fetching course statistics",
-      error: error.message,
+      message: "Course not found",
     })
   }
+
+  // Check if user is enrolled in the course
+  const user = await User.findById(req.user._id)
+  const isEnrolled = user.enrolledCourses.some((enrollment) => enrollment.course.toString() === courseId)
+
+  if (!isEnrolled) {
+    return res.status(400).json({
+      success: false,
+      message: "You must be enrolled in this course to leave a review",
+    })
+  }
+
+  // Check if user already reviewed
+  const alreadyReviewed = course.reviews.find((review) => review.user.toString() === req.user._id.toString())
+
+  if (alreadyReviewed) {
+    return res.status(400).json({
+      success: false,
+      message: "You have already reviewed this course",
+    })
+  }
+
+  // Add review
+  const review = {
+    user: req.user._id,
+    rating: Number(rating),
+    comment,
+    isApproved: false, // Reviews need admin approval
+  }
+
+  course.reviews.push(review)
+  course.calculateAverageRating()
+  await course.save()
+
+  res.status(201).json({
+    success: true,
+    message: "Review added successfully. It will be visible after admin approval.",
+  })
+})
+
+// @desc    Get featured courses
+// @route   GET /api/courses/featured
+// @access  Public
+export const getFeaturedCourses = asyncHandler(async (req, res) => {
+  const courses = await Course.find({
+    isActive: true,
+    isFeatured: true,
+  })
+    .sort({ rating: -1, enrolledStudents: -1 })
+    .limit(6)
+
+  res.json({
+    success: true,
+    data: courses,
+  })
 })

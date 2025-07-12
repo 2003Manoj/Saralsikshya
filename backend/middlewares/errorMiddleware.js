@@ -1,42 +1,57 @@
+// Not found middleware
 export const notFound = (req, res, next) => {
-  const error = new Error(`Not found - ${req.originalUrl}`)
+  const error = new Error(`Not Found - ${req.originalUrl}`)
   res.status(404)
   next(error)
 }
 
+// Error handler middleware
 export const errorHandler = (err, req, res, next) => {
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode
-  let message = err.message
+  let error = { ...err }
+  error.message = err.message
+
+  // Log error
+  console.error(err)
 
   // Mongoose bad ObjectId
-  if (err.name === "CastError" && err.kind === "ObjectId") {
-    statusCode = 404
-    message = "Resource not found"
+  if (err.name === "CastError") {
+    const message = "Resource not found"
+    error = { message, statusCode: 404 }
   }
 
   // Mongoose duplicate key
   if (err.code === 11000) {
-    statusCode = 400
-    message = "Duplicate field value entered"
+    const message = "Duplicate field value entered"
+    error = { message, statusCode: 400 }
   }
 
   // Mongoose validation error
   if (err.name === "ValidationError") {
-    statusCode = 400
-    message = Object.values(err.errors)
+    const message = Object.values(err.errors)
       .map((val) => val.message)
       .join(", ")
+    error = { message, statusCode: 400 }
   }
 
-  console.error("Error:", {
-    message: err.message,
-    stack: err.stack,
-    statusCode,
-  })
+  // JWT errors
+  if (err.name === "JsonWebTokenError") {
+    const message = "Invalid token"
+    error = { message, statusCode: 401 }
+  }
 
-  res.status(statusCode).json({
+  if (err.name === "TokenExpiredError") {
+    const message = "Token expired"
+    error = { message, statusCode: 401 }
+  }
+
+  res.status(error.statusCode || 500).json({
     success: false,
-    message,
-    stack: process.env.NODE_ENV === "production" ? null : err.stack,
+    message: error.message || "Server Error",
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   })
+}
+
+// Async handler wrapper
+export const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next)
 }

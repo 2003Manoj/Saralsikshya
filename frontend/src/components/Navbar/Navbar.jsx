@@ -8,11 +8,54 @@ import styles from "./Navbar.module.css"
 
 const Navbar = () => {
   const [isCoursesOpen, setIsCoursesOpen] = useState(false)
+  const [activeCategory, setActiveCategory] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchSuggestions, setSearchSuggestions] = useState([])
   const [courses, setCourses] = useState([])
+  const [categories, setCategories] = useState([])
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+
+  // Sample course categories structure - replace with your actual data
+  const courseCategories = [
+    {
+      id: 1,
+      name: "Programming",
+      subcategories: [
+        { id: 11, name: "Web Development", courses: ["HTML/CSS", "JavaScript", "React", "Node.js"] },
+        { id: 12, name: "Mobile Development", courses: ["React Native", "Flutter", "Swift", "Kotlin"] },
+        { id: 13, name: "Data Science", courses: ["Python", "R", "Machine Learning", "Statistics"] },
+        { id: 14, name: "Backend Development", courses: ["Express.js", "Django", "Spring Boot", "Laravel"] }
+      ]
+    },
+    {
+      id: 2,
+      name: "Design",
+      subcategories: [
+        { id: 21, name: "UI/UX Design", courses: ["Figma", "Adobe XD", "Sketch", "Prototyping"] },
+        { id: 22, name: "Graphic Design", courses: ["Photoshop", "Illustrator", "InDesign", "Canva"] },
+        { id: 23, name: "3D Design", courses: ["Blender", "Maya", "3ds Max", "Cinema 4D"] }
+      ]
+    },
+    {
+      id: 3,
+      name: "Business",
+      subcategories: [
+        { id: 31, name: "Marketing", courses: ["Digital Marketing", "SEO", "Social Media", "Content Marketing"] },
+        { id: 32, name: "Finance", courses: ["Accounting", "Investment", "Financial Planning", "Cryptocurrency"] },
+        { id: 33, name: "Management", courses: ["Project Management", "Leadership", "HR Management", "Operations"] }
+      ]
+    },
+    {
+      id: 4,
+      name: "Languages",
+      subcategories: [
+        { id: 41, name: "English", courses: ["Grammar", "Speaking", "Writing", "Literature"] },
+        { id: 42, name: "Nepali", courses: ["Basic Nepali", "Advanced Nepali", "Literature", "Poetry"] },
+        { id: 43, name: "Other Languages", courses: ["Hindi", "Chinese", "Japanese", "Spanish"] }
+      ]
+    }
+  ]
 
   useEffect(() => {
     fetchCourses()
@@ -52,6 +95,23 @@ const Navbar = () => {
     navigate("/")
   }
 
+  const handleCategoryHover = (categoryId) => {
+    setActiveCategory(categoryId)
+  }
+
+  const handleCategoryLeave = () => {
+    setActiveCategory(null)
+  }
+
+  const handleCoursesDropdownEnter = () => {
+    setIsCoursesOpen(true)
+  }
+
+  const handleCoursesDropdownLeave = () => {
+    setIsCoursesOpen(false)
+    setActiveCategory(null)
+  }
+
   return (
     <nav className={styles.navbar}>
       <div className={styles.container}>
@@ -66,20 +126,59 @@ const Navbar = () => {
           </li>
           <li
             className={styles.dropdown}
-            onMouseEnter={() => setIsCoursesOpen(true)}
-            onMouseLeave={() => setIsCoursesOpen(false)}
+            onMouseEnter={handleCoursesDropdownEnter}
+            onMouseLeave={handleCoursesDropdownLeave}
           >
             <Link to="/courses">Our Courses</Link>
             {isCoursesOpen && (
               <div className={styles.dropdownMenu}>
-                {courses.slice(0, 6).map((course) => (
-                  <Link key={course._id} to={`/course/${course._id}`} className={styles.dropdownItem}>
-                    {course.title}
+                <div className={styles.categoriesContainer}>
+                  {courseCategories.map((category) => (
+                    <div
+                      key={category.id}
+                      className={`${styles.categoryItem} ${activeCategory === category.id ? styles.active : ''}`}
+                      onMouseEnter={() => handleCategoryHover(category.id)}
+                      onMouseLeave={handleCategoryLeave}
+                    >
+                      <Link to={`/courses/category/${category.name.toLowerCase()}`} className={styles.categoryLink}>
+                        {category.name}
+                        <span className={styles.arrow}>›</span>
+                      </Link>
+                      
+                      {activeCategory === category.id && (
+                        <div className={styles.subcategoriesMenu}>
+                          {category.subcategories.map((subcategory) => (
+                            <div key={subcategory.id} className={styles.subcategoryItem}>
+                              <Link 
+                                to={`/courses/subcategory/${subcategory.name.toLowerCase().replace(/\s+/g, '-')}`}
+                                className={styles.subcategoryTitle}
+                              >
+                                {subcategory.name}
+                              </Link>
+                              <div className={styles.coursesList}>
+                                {subcategory.courses.map((course, index) => (
+                                  <Link
+                                    key={index}
+                                    to={`/courses/search?q=${course}`}
+                                    className={styles.courseLink}
+                                  >
+                                    {course}
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className={styles.dropdownFooter}>
+                  <Link to="/courses" className={styles.viewAll}>
+                    View All Courses
                   </Link>
-                ))}
-                <Link to="/courses" className={styles.viewAll}>
-                  View All Courses
-                </Link>
+                </div>
               </div>
             )}
           </li>

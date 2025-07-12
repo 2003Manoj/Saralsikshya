@@ -1,25 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  BookOpen, 
-  DollarSign, 
-  TrendingUp, 
-  Eye, 
-  Award, 
-  Calendar, 
-  Activity,
-  ArrowUp,
-  ArrowDown,
-  MoreHorizontal,
-  Star,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  UserPlus,
-  BookPlus,
-  Target,
-  BarChart3
-} from 'lucide-react';
+import { Users, BookOpen, DollarSign, TrendingUp, Eye, Award, Calendar, Activity, ArrowUp, ArrowDown, MoreHorizontal, Star, Clock, CheckCircle, AlertCircle, UserPlus, BookPlus, Target, BarChart3 } from 'lucide-react';
 import styles from './DashboardStats.module.css';
 
 const DashboardStats = () => {
@@ -37,115 +17,138 @@ const DashboardStats = () => {
   const [recentActivities, setRecentActivities] = useState([]);
   const [topCourses, setTopCourses] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // API Base URL
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  // Get token from localStorage
+  const getToken = () => {
+    return localStorage.getItem('token');
+  };
+
+  // API Headers
+  const getHeaders = () => {
+    const token = getToken();
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  };
+
+  // Fetch dashboard statistics
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await fetch(`${API_BASE_URL}/admin/dashboard/stats`, {
+        method: 'GET',
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setStats(data.stats);
+      } else {
+        setError(data.message || 'Failed to fetch dashboard stats');
+      }
+    } catch (err) {
+      setError(err.message || 'Error fetching dashboard stats');
+      console.error('Dashboard stats error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch recent activities
+  const fetchRecentActivities = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/dashboard/activities?limit=5`, {
+        method: 'GET',
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setRecentActivities(data.activities || []);
+      }
+    } catch (err) {
+      console.error('Recent activities error:', err);
+    }
+  };
+
+  // Fetch top courses
+  const fetchTopCourses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/dashboard/top-courses?limit=4`, {
+        method: 'GET',
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTopCourses(data.courses || []);
+      }
+    } catch (err) {
+      console.error('Top courses error:', err);
+    }
+  };
+
+  // Fetch monthly data
+  const fetchMonthlyData = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/dashboard/monthly-data`, {
+        method: 'GET',
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMonthlyData(data.data || []);
+      }
+    } catch (err) {
+      console.error('Monthly data error:', err);
+    }
+  };
 
   useEffect(() => {
-    // Mock data - replace with actual API calls
-    setStats({
-      totalUsers: 2847,
-      totalCourses: 156,
-      totalRevenue: 125840,
-      activeEnrollments: 1923,
-      userGrowth: 12.5,
-      courseGrowth: 8.2,
-      revenueGrowth: 15.8,
-      enrollmentGrowth: 23.4
-    });
+    const fetchAllData = async () => {
+      await Promise.all([
+        fetchDashboardStats(),
+        fetchRecentActivities(),
+        fetchTopCourses(),
+        fetchMonthlyData()
+      ]);
+    };
 
-    setRecentActivities([
-      {
-        id: 1,
-        type: 'user_registration',
-        user: 'John Doe',
-        action: 'registered for an account',
-        time: '2 minutes ago',
-        icon: UserPlus,
-        color: 'blue'
-      },
-      {
-        id: 2,
-        type: 'course_enrollment',
-        user: 'Sarah Johnson',
-        action: 'enrolled in "React Fundamentals"',
-        time: '5 minutes ago',
-        icon: BookPlus,
-        color: 'green'
-      },
-      {
-        id: 3,
-        type: 'course_completion',
-        user: 'Mike Wilson',
-        action: 'completed "JavaScript Basics"',
-        time: '10 minutes ago',
-        icon: CheckCircle,
-        color: 'purple'
-      },
-      {
-        id: 4,
-        type: 'payment',
-        user: 'Lisa Chen',
-        action: 'made a payment of $299',
-        time: '15 minutes ago',
-        icon: DollarSign,
-        color: 'orange'
-      },
-      {
-        id: 5,
-        type: 'course_creation',
-        user: 'Admin',
-        action: 'created new course "Advanced Node.js"',
-        time: '1 hour ago',
-        icon: BookOpen,
-        color: 'indigo'
-      }
-    ]);
-
-    setTopCourses([
-      {
-        id: 1,
-        title: 'Complete Web Development Bootcamp',
-        instructor: 'John Smith',
-        enrollments: 1250,
-        rating: 4.8,
-        revenue: 45000,
-        progress: 85
-      },
-      {
-        id: 2,
-        title: 'React.js Complete Course',
-        instructor: 'Sarah Johnson',
-        enrollments: 890,
-        rating: 4.7,
-        revenue: 32000,
-        progress: 78
-      },
-      {
-        id: 3,
-        title: 'Node.js Backend Development',
-        instructor: 'Mike Davis',
-        enrollments: 654,
-        rating: 4.6,
-        revenue: 28000,
-        progress: 72
-      },
-      {
-        id: 4,
-        title: 'Python for Data Science',
-        instructor: 'Emma Wilson',
-        enrollments: 543,
-        rating: 4.9,
-        revenue: 25000,
-        progress: 68
-      }
-    ]);
-
-    setMonthlyData([
-      { month: 'Jan', users: 420, courses: 12, revenue: 8500 },
-      { month: 'Feb', users: 380, courses: 15, revenue: 9200 },
-      { month: 'Mar', users: 520, courses: 18, revenue: 11800 },
-      { month: 'Apr', users: 680, courses: 14, revenue: 15200 },
-      { month: 'May', users: 750, courses: 22, revenue: 18900 },
-      { month: 'Jun', users: 890, courses: 25, revenue: 22400 }
-    ]);
+    fetchAllData();
   }, []);
 
   const formatCurrency = (amount) => {
@@ -183,9 +186,42 @@ const DashboardStats = () => {
   );
 
   const getActivityIcon = (activity) => {
-    const IconComponent = activity.icon;
+    const iconMap = {
+      UserPlus,
+      BookPlus,
+      CheckCircle,
+      DollarSign,
+      BookOpen
+    };
+    const IconComponent = iconMap[activity.icon] || Activity;
     return <IconComponent className={styles.activityIcon} />;
   };
+
+  if (loading) {
+    return (
+      <div className={styles.dashboard}>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner}></div>
+          <span>Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.dashboard}>
+        <div className={styles.errorContainer}>
+          <AlertCircle className={styles.errorIcon} />
+          <h3>Error Loading Dashboard</h3>
+          <p>{error}</p>
+          <button onClick={fetchDashboardStats} className={styles.retryButton}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.dashboard}>
@@ -198,7 +234,7 @@ const DashboardStats = () => {
           </p>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.refreshButton}>
+          <button className={styles.refreshButton} onClick={fetchDashboardStats}>
             <Activity className={styles.buttonIcon} />
             Refresh
           </button>
@@ -380,7 +416,6 @@ const DashboardStats = () => {
             </button>
           </div>
         </div>
-        
       </div>
     </div>
   );

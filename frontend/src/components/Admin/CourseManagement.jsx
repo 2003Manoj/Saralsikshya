@@ -1,87 +1,103 @@
 import React, { useState, useEffect } from 'react';
-import styles from "./CourseManagement.module.css";
+import styles from './CourseManagement.module.css';
 
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL
- || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// API utility function
-const apiRequest = async (url, options = {}) => {
-  const token = localStorage.getItem('authToken'); // Adjust based on your auth setup
-  
-  const defaultOptions = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
+// Get token from localStorage
+const getToken = () => {
+  return localStorage.getItem('token');
+};
+
+// API Headers
+const getHeaders = () => {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
   };
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...defaultOptions,
-    ...options,
-    headers: {
-      ...defaultOptions.headers,
-      ...options.headers,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || 'API request failed');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return data;
+  return headers;
 };
 
 // Course API functions
 const courseAPI = {
-  // Get all courses for admin (includes inactive courses)
   getAllCourses: async (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
-    const url = `/admin/courses${queryString ? `?${queryString}` : ''}`;
-    return apiRequest(url);
+    const url = `${API_BASE_URL}/courses${queryString ? `?${queryString}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   },
 
-  // Get course by ID (public route)
-  getCourseById: async (id) => {
-    return apiRequest(`/courses/${id}`);
-  },
-
-  // Create new course
   createCourse: async (courseData) => {
-    return apiRequest('/admin/courses', {
+    const response = await fetch(`${API_BASE_URL}/courses`, {
       method: 'POST',
+      headers: getHeaders(),
       body: JSON.stringify(courseData),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   },
 
-  // Update course
   updateCourse: async (id, courseData) => {
-    return apiRequest(`/admin/courses/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
       method: 'PUT',
+      headers: getHeaders(),
       body: JSON.stringify(courseData),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   },
 
-  // Delete course
   deleteCourse: async (id) => {
-    return apiRequest(`/admin/courses/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
       method: 'DELETE',
+      headers: getHeaders(),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   },
 
-  // Toggle course status
   toggleCourseStatus: async (id, isActive) => {
-    return apiRequest(`/admin/courses/${id}/status`, {
+    const response = await fetch(`${API_BASE_URL}/courses/${id}/status`, {
       method: 'PATCH',
+      headers: getHeaders(),
       body: JSON.stringify({ isActive }),
     });
-  },
 
-  // Get course statistics
-  getCourseStats: async () => {
-    return apiRequest('/admin/courses/stats');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   },
 };
 
@@ -89,10 +105,12 @@ const CourseManagement = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterSubCategory, setFilterSubCategory] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [pagination, setPagination] = useState({
     page: 1,
@@ -101,23 +119,36 @@ const CourseManagement = () => {
     pages: 0,
   });
 
-  const categories = [
-    "Web Development", "Mobile Development", "Data Science", "Machine Learning",
-    "DevOps", "Cybersecurity", "UI/UX Design", "Digital Marketing",
-    "Business", "Programming", "Database", "Cloud Computing"
-  ];
+  // Hierarchical category structure
+  const categoryStructure = {
+    'लोकसेवा': {
+      'निजामति': ['शाखा अधिकृत', 'नासु', 'खरिदार', 'प्राविधिक', 'सहायक', 'विद्यालय', 'निरीक्षक'],
+      'संस्थान': ['टेलिकम', 'विद्युत', 'खाद्यन्न'],
+      'सुरक्षा सेवा': [],
+      'प्रविधिक': [],
+      'प्रदेश लोक सेवा': ['कोशी प्रदेश', 'मधेस प्रदेश', 'बागमती प्रदेश', 'गण्डकी प्रदेश', 'लुम्बिनी प्रदेश'],
+      'बैंक': []
+    },
+    'Web Development': {
+      'Frontend': ['React', 'Vue.js', 'Angular'],
+      'Backend': ['Node.js', 'Python', 'Java'],
+      'Full Stack': []
+    },
+    'Data Science': {
+      'Machine Learning': ['Supervised', 'Unsupervised', 'Deep Learning'],
+      'Analytics': ['Statistics', 'Visualization', 'Big Data']
+    }
+  };
 
-  const levels = ["Beginner", "Intermediate", "Advanced"];
+  const levels = ['Beginner', 'Intermediate', 'Advanced'];
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    instructor: {
-      name: '',
-      bio: '',
-      image: ''
-    },
+    instructor: { name: '', bio: '', image: '' },
     category: '',
+    subCategory: '',
+    subSubCategory: '',
     level: '',
     price: '',
     originalPrice: '',
@@ -133,71 +164,120 @@ const CourseManagement = () => {
     enrolledStudents: 0
   });
 
+  // Auto-clear messages
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
+
+  // Get available subcategories based on selected category
+  const getSubCategories = (category) => {
+    return categoryStructure[category] ? Object.keys(categoryStructure[category]) : [];
+  };
+
+  // Get available sub-subcategories based on selected category and subcategory
+  const getSubSubCategories = (category, subCategory) => {
+    return categoryStructure[category] && categoryStructure[category][subCategory]
+      ? categoryStructure[category][subCategory]
+      : [];
+  };
+
   // Fetch courses with filters
   const fetchCourses = async (page = 1) => {
     setLoading(true);
     setError('');
-    
+
     try {
       const params = {
         page,
         limit: pagination.limit,
         ...(searchTerm && { search: searchTerm }),
         ...(filterCategory && { category: filterCategory }),
+        ...(filterSubCategory && { subCategory: filterSubCategory }),
         ...(filterLevel && { level: filterLevel }),
       };
 
       const response = await courseAPI.getAllCourses(params);
-      
-      setCourses(response.data);
-      setPagination(response.pagination);
+
+      if (response.success) {
+        setCourses(response.data || []);
+        setPagination(response.pagination || {
+          page: 1,
+          limit: 10,
+          total: 0,
+          pages: 0,
+        });
+      } else {
+        setError(response.message || 'Failed to fetch courses');
+      }
     } catch (error) {
-      setError(error.message);
-      console.error('Error fetching courses:', error);
+      setError(`Failed to fetch courses: ${error.message}`);
+      setCourses([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Create course
   const createCourse = async (courseData) => {
     try {
       const response = await courseAPI.createCourse(courseData);
-      await fetchCourses(); // Refresh the list
-      return response;
+      if (response.success) {
+        setSuccess('Course created successfully!');
+        await fetchCourses();
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to create course');
+      }
     } catch (error) {
-      throw error;
+      throw new Error(`Failed to create course: ${error.message}`);
     }
   };
 
-  // Update course
   const updateCourse = async (id, courseData) => {
     try {
       const response = await courseAPI.updateCourse(id, courseData);
-      await fetchCourses(); // Refresh the list
-      return response;
+      if (response.success) {
+        setSuccess('Course updated successfully!');
+        await fetchCourses();
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to update course');
+      }
     } catch (error) {
-      throw error;
+      throw new Error(`Failed to update course: ${error.message}`);
     }
   };
 
-  // Delete course
   const deleteCourse = async (id) => {
     try {
-      await courseAPI.deleteCourse(id);
-      await fetchCourses(); // Refresh the list
+      const response = await courseAPI.deleteCourse(id);
+      if (response.success) {
+        setSuccess('Course deleted successfully!');
+        await fetchCourses();
+      } else {
+        throw new Error(response.message || 'Failed to delete course');
+      }
     } catch (error) {
-      throw error;
+      throw new Error(`Failed to delete course: ${error.message}`);
     }
   };
 
-  // Toggle course status
   const toggleStatus = async (id, isActive) => {
     try {
-      await courseAPI.toggleCourseStatus(id, isActive);
-      await fetchCourses(); // Refresh the list
+      const response = await courseAPI.toggleCourseStatus(id, isActive);
+      if (response.success) {
+        setSuccess(`Course ${isActive ? 'activated' : 'deactivated'} successfully!`);
+        await fetchCourses();
+      } else {
+        throw new Error(response.message || 'Failed to toggle course status');
+      }
     } catch (error) {
-      setError(error.message);
+      setError(`Failed to toggle course status: ${error.message}`);
     }
   };
 
@@ -205,20 +285,16 @@ const CourseManagement = () => {
     fetchCourses();
   }, []);
 
-  // Debounced search effect
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
-      if (searchTerm !== '' || filterCategory !== '' || filterLevel !== '') {
-        fetchCourses(1);
-      }
+      fetchCourses(1);
     }, 500);
-
     return () => clearTimeout(delayedSearch);
-  }, [searchTerm, filterCategory, filterLevel]);
+  }, [searchTerm, filterCategory, filterSubCategory, filterLevel]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setFormData(prev => ({
@@ -229,43 +305,88 @@ const CourseManagement = () => {
         }
       }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value
-      }));
+      // Reset subcategories when category changes
+      if (name === 'category') {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          subCategory: '',
+          subSubCategory: ''
+        }));
+      } else if (name === 'subCategory') {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          subSubCategory: ''
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          [name]: type === 'checkbox' ? checked : value
+        }));
+      }
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validateForm = () => {
+    if (!formData.title.trim()) {
+      throw new Error('Course title is required');
+    }
+    if (!formData.description.trim()) {
+      throw new Error('Course description is required');
+    }
+    if (!formData.instructor.name.trim()) {
+      throw new Error('Instructor name is required');
+    }
+    if (!formData.category) {
+      throw new Error('Category is required');
+    }
+    if (!formData.subCategory) {
+      throw new Error('Subcategory is required');
+    }
+    if (!formData.level) {
+      throw new Error('Level is required');
+    }
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      throw new Error('Valid price is required');
+    }
+    if (!formData.duration.trim()) {
+      throw new Error('Duration is required');
+    }
+    if (!formData.lessons || parseInt(formData.lessons) <= 0) {
+      throw new Error('Valid number of lessons is required');
+    }
+  };
+
+  const handleSubmit = async () => {
     setLoading(true);
     setError('');
-    
-    const courseData = {
-      ...formData,
-      price: parseFloat(formData.price),
-      originalPrice: parseFloat(formData.originalPrice) || parseFloat(formData.price),
-      lessons: parseInt(formData.lessons),
-      enrolledStudents: parseInt(formData.enrolledStudents) || 0,
-      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-      requirements: formData.requirements.split('\n').filter(req => req.trim()),
-      whatYouWillLearn: formData.whatYouWillLearn.split('\n').filter(learn => learn.trim())
-    };
+    setSuccess('');
 
     try {
+      validateForm();
+
+      const courseData = {
+        ...formData,
+        price: parseFloat(formData.price),
+        originalPrice: parseFloat(formData.originalPrice) || parseFloat(formData.price),
+        lessons: parseInt(formData.lessons),
+        enrolledStudents: parseInt(formData.enrolledStudents) || 0,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+        requirements: formData.requirements.split('\n').map(req => req.trim()).filter(req => req),
+        whatYouWillLearn: formData.whatYouWillLearn.split('\n').map(learn => learn.trim()).filter(learn => learn)
+      };
+
       if (editingCourse) {
         await updateCourse(editingCourse._id, courseData);
       } else {
         await createCourse(courseData);
       }
-      
+
       resetForm();
       setShowForm(false);
     } catch (error) {
       setError(error.message);
-      if (error.errors) {
-        setError(error.errors.join(', '));
-      }
     } finally {
       setLoading(false);
     }
@@ -275,12 +396,10 @@ const CourseManagement = () => {
     setFormData({
       title: '',
       description: '',
-      instructor: {
-        name: '',
-        bio: '',
-        image: ''
-      },
+      instructor: { name: '', bio: '', image: '' },
       category: '',
+      subCategory: '',
+      subSubCategory: '',
       level: '',
       price: '',
       originalPrice: '',
@@ -302,25 +421,30 @@ const CourseManagement = () => {
     setEditingCourse(course);
     setFormData({
       ...course,
-      tags: course.tags.join(', '),
-      requirements: course.requirements.join('\n'),
-      whatYouWillLearn: course.whatYouWillLearn.join('\n')
+      tags: course.tags ? course.tags.join(', ') : '',
+      requirements: course.requirements ? course.requirements.join('\n') : '',
+      whatYouWillLearn: course.whatYouWillLearn ? course.whatYouWillLearn.join('\n') : ''
     });
     setShowForm(true);
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this course?')) {
+      setLoading(true);
       try {
         await deleteCourse(id);
       } catch (error) {
         setError(error.message);
+      } finally {
+        setLoading(false);
       }
     }
   };
 
   const handleStatusToggle = async (id, currentStatus) => {
+    setLoading(true);
     await toggleStatus(id, !currentStatus);
+    setLoading(false);
   };
 
   const handlePageChange = (newPage) => {
@@ -330,6 +454,7 @@ const CourseManagement = () => {
   const clearFilters = () => {
     setSearchTerm('');
     setFilterCategory('');
+    setFilterSubCategory('');
     setFilterLevel('');
     fetchCourses(1);
   };
@@ -343,14 +468,22 @@ const CourseManagement = () => {
           onClick={() => setShowForm(true)}
           disabled={loading}
         >
-          Add New Course
+          + Add New Course
         </button>
       </div>
+
+      {/* Success Message */}
+      {success && (
+        <div className={styles.success}>
+          <span>✅ {success}</span>
+          <button onClick={() => setSuccess('')}>×</button>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
         <div className={styles.error}>
-          <span>Error: {error}</span>
+          <span>⚠️ {error}</span>
           <button onClick={() => setError('')}>×</button>
         </div>
       )}
@@ -360,7 +493,7 @@ const CourseManagement = () => {
         <div className={styles.searchContainer}>
           <input
             type="text"
-            placeholder="Search courses..."
+            placeholder="🔍 Search courses..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className={styles.searchInput}
@@ -369,14 +502,30 @@ const CourseManagement = () => {
         
         <select
           value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
+          onChange={(e) => {
+            setFilterCategory(e.target.value);
+            setFilterSubCategory('');
+          }}
           className={styles.filterSelect}
         >
           <option value="">All Categories</option>
-          {categories.map(category => (
+          {Object.keys(categoryStructure).map(category => (
             <option key={category} value={category}>{category}</option>
           ))}
         </select>
+
+        {filterCategory && (
+          <select
+            value={filterSubCategory}
+            onChange={(e) => setFilterSubCategory(e.target.value)}
+            className={styles.filterSelect}
+          >
+            <option value="">All Subcategories</option>
+            {getSubCategories(filterCategory).map(subCategory => (
+              <option key={subCategory} value={subCategory}>{subCategory}</option>
+            ))}
+          </select>
+        )}
 
         <select
           value={filterLevel}
@@ -419,7 +568,7 @@ const CourseManagement = () => {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.form}>
               <div className={styles.formRow}>
                 <div className={styles.formGroup}>
                   <label>Course Title *</label>
@@ -442,12 +591,47 @@ const CourseManagement = () => {
                     required
                   >
                     <option value="">Select Category</option>
-                    {categories.map(category => (
+                    {Object.keys(categoryStructure).map(category => (
                       <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {formData.category && (
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label>Subcategory *</label>
+                    <select
+                      name="subCategory"
+                      value={formData.subCategory}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      <option value="">Select Subcategory</option>
+                      {getSubCategories(formData.category).map(subCategory => (
+                        <option key={subCategory} value={subCategory}>{subCategory}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {formData.subCategory && getSubSubCategories(formData.category, formData.subCategory).length > 0 && (
+                    <div className={styles.formGroup}>
+                      <label>Specialization</label>
+                      <select
+                        name="subSubCategory"
+                        value={formData.subSubCategory}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Select Specialization</option>
+                        {getSubSubCategories(formData.category, formData.subCategory).map(subSubCategory => (
+                          <option key={subSubCategory} value={subSubCategory}>{subSubCategory}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className={styles.formGroup}>
                 <label>Description *</label>
@@ -502,7 +686,7 @@ const CourseManagement = () => {
 
               <div className={styles.formRow}>
                 <div className={styles.formGroup}>
-                  <label>Price *</label>
+                  <label>Price (₹) *</label>
                   <input
                     type="number"
                     name="price"
@@ -515,7 +699,7 @@ const CourseManagement = () => {
                 </div>
                 
                 <div className={styles.formGroup}>
-                  <label>Original Price</label>
+                  <label>Original Price (₹)</label>
                   <input
                     type="number"
                     name="originalPrice"
@@ -536,7 +720,7 @@ const CourseManagement = () => {
                     value={formData.duration}
                     onChange={handleInputChange}
                     required
-                    placeholder="e.g., 8 weeks"
+                    placeholder="e.g., 3 months"
                   />
                 </div>
                 
@@ -560,7 +744,7 @@ const CourseManagement = () => {
                   name="tags"
                   value={formData.tags}
                   onChange={handleInputChange}
-                  placeholder="e.g., JavaScript, React, Node.js"
+                  placeholder="e.g., लोकसेवा, परीक्षा, तयारी"
                 />
               </div>
 
@@ -571,7 +755,7 @@ const CourseManagement = () => {
                   value={formData.requirements}
                   onChange={handleInputChange}
                   rows={4}
-                  placeholder="Basic computer skills&#10;No programming experience required"
+                  placeholder="Basic computer skills&#10;Nepali language proficiency"
                 />
               </div>
 
@@ -582,13 +766,13 @@ const CourseManagement = () => {
                   value={formData.whatYouWillLearn}
                   onChange={handleInputChange}
                   rows={4}
-                  placeholder="Build responsive websites&#10;Master JavaScript fundamentals"
+                  placeholder="Exam pattern understanding&#10;Subject mastery"
                 />
               </div>
 
               <div className={styles.formRow}>
                 <div className={styles.formGroup}>
-                  <label>
+                  <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
                       name="isActive"
@@ -601,11 +785,16 @@ const CourseManagement = () => {
               </div>
 
               <div className={styles.formActions}>
-                <button type="submit" className={styles.submitBtn} disabled={loading}>
+                <button 
+                  type="button" 
+                  className={styles.submitBtn} 
+                  disabled={loading} 
+                  onClick={handleSubmit}
+                >
                   {loading ? 'Saving...' : (editingCourse ? 'Update Course' : 'Create Course')}
                 </button>
                 <button 
-                  type="button" 
+                  type="button"
                   className={styles.cancelBtn}
                   onClick={() => {
                     setShowForm(false);
@@ -615,12 +804,12 @@ const CourseManagement = () => {
                   Cancel
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Courses List */}
+      {/* Courses Grid */}
       <div className={styles.coursesGrid}>
         {courses.map(course => (
           <div key={course._id} className={styles.courseCard}>
@@ -628,51 +817,50 @@ const CourseManagement = () => {
               <h3 className={styles.courseTitle}>{course.title}</h3>
               <div className={styles.courseActions}>
                 <button 
-                  className={styles.statusBtn}
+                  className={`${styles.statusBtn} ${course.isActive ? styles.active : styles.inactive}`}
                   onClick={() => handleStatusToggle(course._id, course.isActive)}
                   disabled={loading}
                 >
-                  {course.isActive ? 'Deactivate' : 'Activate'}
+                  {course.isActive ? '✓ Active' : '✗ Inactive'}
                 </button>
                 <button 
                   className={styles.editBtn}
                   onClick={() => handleEdit(course)}
                   disabled={loading}
                 >
-                  Edit
+                  ✏️ Edit
                 </button>
                 <button 
                   className={styles.deleteBtn}
                   onClick={() => handleDelete(course._id)}
                   disabled={loading}
                 >
-                  Delete
+                  🗑️ Delete
                 </button>
               </div>
             </div>
             
             <div className={styles.courseInfo}>
               <span className={styles.category}>{course.category}</span>
+              {course.subCategory && <span className={styles.subCategory}>{course.subCategory}</span>}
+              {course.subSubCategory && <span className={styles.subSubCategory}>{course.subSubCategory}</span>}
               <span className={styles.level}>{course.level}</span>
-              <span className={`${styles.status} ${course.isActive ? styles.active : styles.inactive}`}>
-                {course.isActive ? 'Active' : 'Inactive'}
-              </span>
             </div>
             
             <p className={styles.courseDescription}>{course.description}</p>
             
             <div className={styles.courseDetails}>
               <div className={styles.instructor}>
-                <strong>Instructor:</strong> {course.instructor.name}
+                <strong>👨‍🏫 Instructor:</strong> {course.instructor.name}
               </div>
               <div className={styles.stats}>
-                <span>₹{course.price}</span>
-                <span>{course.lessons} lessons</span>
-                <span>{course.duration}</span>
+                <span className={styles.price}>₹{course.price}</span>
+                <span className={styles.lessons}>📚 {course.lessons} lessons</span>
+                <span className={styles.duration}>⏱️ {course.duration}</span>
               </div>
               <div className={styles.enrollment}>
-                <span>⭐ {course.rating.toFixed(1)} ({course.numReviews} reviews)</span>
-                <span>👥 {course.enrolledStudents} students</span>
+                <span className={styles.rating}>⭐ {course.rating.toFixed(1)} ({course.numReviews} reviews)</span>
+                <span className={styles.students}>👥 {course.enrolledStudents} students</span>
               </div>
             </div>
             
@@ -693,11 +881,12 @@ const CourseManagement = () => {
           <button 
             onClick={() => handlePageChange(pagination.page - 1)}
             disabled={pagination.page === 1 || loading}
+            className={styles.paginationBtn}
           >
-            Previous
+            ← Previous
           </button>
           
-          <span>
+          <span className={styles.paginationInfo}>
             Page {pagination.page} of {pagination.pages} 
             ({pagination.total} total courses)
           </span>
@@ -705,16 +894,17 @@ const CourseManagement = () => {
           <button 
             onClick={() => handlePageChange(pagination.page + 1)}
             disabled={pagination.page === pagination.pages || loading}
+            className={styles.paginationBtn}
           >
-            Next
+            Next →
           </button>
         </div>
       )}
 
       {courses.length === 0 && !loading && (
         <div className={styles.empty}>
-          <h3>No courses found</h3>
-          <p>Try adjusting your search or filter criteria, or add a new course.</p>
+          <h3>📚 No courses found</h3>
+          <p>Try adjusting your search or filter criteria, or add a new course to get started.</p>
         </div>
       )}
     </div>

@@ -1,49 +1,111 @@
 import mongoose from "mongoose"
 
+const lessonSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, "Lesson title is required"],
+    trim: true,
+    maxlength: [100, "Lesson title cannot exceed 100 characters"],
+  },
+  description: {
+    type: String,
+    maxlength: [500, "Lesson description cannot exceed 500 characters"],
+  },
+  videoUrl: String,
+  duration: {
+    type: Number, // in minutes
+    min: [1, "Duration must be at least 1 minute"],
+  },
+  order: {
+    type: Number,
+    required: true,
+  },
+  isPreview: {
+    type: Boolean,
+    default: false,
+  },
+  resources: [
+    {
+      title: String,
+      url: String,
+      type: {
+        type: String,
+        enum: ["pdf", "video", "link", "document"],
+      },
+    },
+  ],
+})
+
+const reviewSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    rating: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
+    },
+    comment: {
+      type: String,
+      maxlength: [500, "Review comment cannot exceed 500 characters"],
+    },
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+  },
+)
+
 const courseSchema = new mongoose.Schema(
   {
     title: {
       type: String,
       required: [true, "Course title is required"],
       trim: true,
-      maxlength: [100, "Title cannot exceed 100 characters"],
+      maxlength: [100, "Course title cannot exceed 100 characters"],
+      minlength: [5, "Course title must be at least 5 characters"],
     },
     description: {
       type: String,
       required: [true, "Course description is required"],
-      maxlength: [1000, "Description cannot exceed 1000 characters"],
+      maxlength: [1000, "Course description cannot exceed 1000 characters"],
+      minlength: [20, "Course description must be at least 20 characters"],
     },
     instructor: {
       name: {
         type: String,
         required: [true, "Instructor name is required"],
+        trim: true,
+        maxlength: [50, "Instructor name cannot exceed 50 characters"],
       },
       bio: {
         type: String,
         maxlength: [500, "Instructor bio cannot exceed 500 characters"],
       },
-      image: {
-        type: String,
-        default: "/placeholder.svg?height=200&width=300",
-      },
+      image: String,
+      email: String,
+      experience: String,
     },
     category: {
       type: String,
-      required: [true, "Course category is required"],
-      enum: [
-        "Web Development",
-        "Mobile Development",
-        "Data Science",
-        "Machine Learning",
-        "DevOps",
-        "Cybersecurity",
-        "UI/UX Design",
-        "Digital Marketing",
-        "Business",
-        "Programming",
-        "Database",
-        "Cloud Computing",
-      ],
+      required: [true, "Category is required"],
+      trim: true,
+    },
+    subCategory: {
+      type: String,
+      required: [true, "Subcategory is required"],
+      trim: true,
+    },
+    subSubCategory: {
+      type: String,
+      trim: true,
     },
     level: {
       type: String,
@@ -57,61 +119,83 @@ const courseSchema = new mongoose.Schema(
     },
     originalPrice: {
       type: Number,
-      default: function () {
-        return this.price
-      },
+      min: [0, "Original price cannot be negative"],
     },
     duration: {
       type: String,
       required: [true, "Course duration is required"],
+      trim: true,
     },
     lessons: {
       type: Number,
       required: [true, "Number of lessons is required"],
       min: [1, "Course must have at least 1 lesson"],
     },
+    lessonsContent: [lessonSchema],
     image: {
       type: String,
-      default: "/placeholder.svg?height=200&width=300",
+      default: "",
     },
+    thumbnail: String,
     rating: {
       type: Number,
       default: 0,
-      min: [0, "Rating cannot be less than 0"],
-      max: [5, "Rating cannot be more than 5"],
+      min: 0,
+      max: 5,
     },
     numReviews: {
       type: Number,
       default: 0,
     },
+    reviews: [reviewSchema],
     isActive: {
       type: Boolean,
       default: true,
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
     },
     tags: [
       {
         type: String,
         trim: true,
+        maxlength: [30, "Tag cannot exceed 30 characters"],
       },
     ],
-    curriculum: [
+    requirements: [
       {
-        title: {
-          type: String,
-          required: true,
-        },
-        duration: {
-          type: String,
-          required: true,
-        },
-        topics: [String],
+        type: String,
+        trim: true,
+        maxlength: [100, "Requirement cannot exceed 100 characters"],
       },
     ],
-    requirements: [String],
-    whatYouWillLearn: [String],
+    whatYouWillLearn: [
+      {
+        type: String,
+        trim: true,
+        maxlength: [100, "Learning outcome cannot exceed 100 characters"],
+      },
+    ],
     enrolledStudents: {
       type: Number,
       default: 0,
+    },
+    totalRevenue: {
+      type: Number,
+      default: 0,
+    },
+    language: {
+      type: String,
+      default: "English",
+    },
+    certificate: {
+      type: Boolean,
+      default: false,
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
@@ -119,111 +203,65 @@ const courseSchema = new mongoose.Schema(
   },
 )
 
-// Index for search functionality
-courseSchema.index({ title: "text", description: "text", category: "text" })
+// Indexes for better performance
+courseSchema.index({ title: "text", description: "text" })
+courseSchema.index({ category: 1, subCategory: 1 })
+courseSchema.index({ level: 1 })
+courseSchema.index({ rating: -1 })
+courseSchema.index({ enrolledStudents: -1 })
+courseSchema.index({ isActive: 1 })
+courseSchema.index({ createdAt: -1 })
+courseSchema.index({ price: 1 })
 
-// Add some default courses when the model is first created
-courseSchema.statics.seedCourses = async function () {
-  const count = await this.countDocuments()
-  if (count === 0) {
-   const defaultCourses = [
-  {
-    title: "Complete Web Development Bootcamp",
-    description:
-      "Learn HTML, CSS, JavaScript, React, Node.js and more in this comprehensive web development course.",
-    instructor: {
-      name: "John Smith",
-      bio: "Experienced full-stack developer and bootcamp instructor.",
-    },
-    category: "Web Development",
-    level: "Beginner",
-    price: 2999,
-    originalPrice: 4999,
-    duration: "12 weeks",
-    lessons: 120,
-    rating: 4.8,
-    numReviews: 1250,
-    enrolledStudents: 5000,
-    tags: ["HTML", "CSS", "JavaScript", "React", "Node.js"],
-    whatYouWillLearn: [
-      "Build responsive websites with HTML and CSS",
-      "Master JavaScript fundamentals and ES6+",
-      "Create dynamic web apps with React",
-      "Build backend APIs with Node.js and Express",
-      "Work with databases (MongoDB)",
-    ],
-    requirements: [
-      "Basic computer skills",
-      "No programming experience required",
-      "Willingness to learn and practice",
-    ],
-  },
-  {
-    title: "React.js Complete Course",
-    description:
-      "Master React.js from basics to advanced concepts including hooks, context, and state management.",
-    instructor: {
-      name: "Sarah Johnson",
-      bio: "Frontend developer and React specialist.",
-    },
-    category: "Web Development",
-    level: "Intermediate",
-    price: 1999,
-    originalPrice: 3499,
-    duration: "8 weeks",
-    lessons: 80,
-    rating: 4.7,
-    numReviews: 890,
-    enrolledStudents: 3200,
-    tags: ["React", "JavaScript", "Hooks", "Redux"],
-    whatYouWillLearn: [
-      "Build modern React applications",
-      "Master React Hooks and Context API",
-      "State management with Redux",
-      "Testing React components",
-    ],
-    requirements: [
-      "Basic JavaScript knowledge",
-      "HTML and CSS fundamentals",
-      "Understanding of ES6 features",
-    ],
-  },
-  {
-    title: "Python for Data Science",
-    description:
-      "Learn Python programming for data analysis, visualization, and machine learning applications.",
-    instructor: {
-      name: "Dr. Michael Chen",
-      bio: "Data scientist and professor with years of industry experience.",
-    },
-    category: "Data Science",
-    level: "Beginner",
-    price: 2499,
-    originalPrice: 3999,
-    duration: "10 weeks",
-    lessons: 100,
-    rating: 4.9,
-    numReviews: 1500,
-    enrolledStudents: 4500,
-    tags: ["Python", "Data Analysis", "Pandas", "NumPy", "Matplotlib"],
-    whatYouWillLearn: [
-      "Python programming fundamentals",
-      "Data manipulation with Pandas",
-      "Data visualization with Matplotlib",
-      "Introduction to machine learning",
-    ],
-    requirements: [
-      "Basic mathematics knowledge",
-      "No programming experience required",
-      "Interest in data and analytics",
-    ],
-  },
-]
-
-
-    await this.insertMany(defaultCourses)
-    console.log("Default courses seeded successfully")
+// Virtual for discount percentage
+courseSchema.virtual("discountPercentage").get(function () {
+  if (this.originalPrice && this.originalPrice > this.price) {
+    return Math.round(((this.originalPrice - this.price) / this.originalPrice) * 100)
   }
+  return 0
+})
+
+// Method to calculate average rating
+courseSchema.methods.calculateAverageRating = function () {
+  if (this.reviews.length === 0) {
+    this.rating = 0
+    this.numReviews = 0
+    return
+  }
+
+  const approvedReviews = this.reviews.filter((review) => review.isApproved)
+  if (approvedReviews.length === 0) {
+    this.rating = 0
+    this.numReviews = 0
+    return
+  }
+
+  const totalRating = approvedReviews.reduce((sum, review) => sum + review.rating, 0)
+  this.rating = (totalRating / approvedReviews.length).toFixed(1)
+  this.numReviews = approvedReviews.length
 }
+
+// Method to update enrollment count
+courseSchema.methods.updateEnrollmentCount = async function () {
+  const User = mongoose.model("User")
+  const count = await User.countDocuments({
+    "enrolledCourses.course": this._id,
+  })
+  this.enrolledStudents = count
+  return this.save()
+}
+
+// Pre-save middleware
+courseSchema.pre("save", function (next) {
+  // Set original price if not provided
+  if (!this.originalPrice) {
+    this.originalPrice = this.price
+  }
+
+  // Update lastUpdated
+  this.lastUpdated = new Date()
+
+  next()
+})
 
 export default mongoose.model("Course", courseSchema)

@@ -1,49 +1,41 @@
-// import express from "express"
-// import { registerUser, loginUser, getUserProfile, updateUserProfile } from "../controllers/user/authController.js"
-// import { protect } from "../middlewares/authMiddleware.js"
-
-// const router = express.Router()
-
-// // Public routes
-// router.post("/register", registerUser)
-// router.post("/login", loginUser)
-
-// // Protected routes
-// router.get("/profile", protect, getUserProfile)
-// router.put("/profile", protect, updateUserProfile)
-
-// export default router
 import express from "express"
-import { 
-  getAllUsers,
+import {
+  getUsers,
+  getUserById,
   createUser,
   updateUser,
   deleteUser,
-  updateUserStatus
-} from "../controllers/admin/adminController.js"
-import { 
-  registerUser, 
-  loginUser, 
-  getUserProfile, 
-  updateUserProfile 
-} from "../controllers/user/authController.js"
-import { protect, admin } from "../middlewares/authMiddleware.js"
+  toggleUserStatus,
+  getUserStats,
+  enrollUserInCourse,
+} from "../controllers/admin/userController.js"
+import { protect, adminOnly } from "../middlewares/authMiddleware.js"
+import { createLimiter } from "../middlewares/securityMiddleware.js"
+import {
+  validateUserRegistration,
+  validateUserUpdate,
+  validateObjectId,
+  validatePagination,
+} from "../middlewares/validationMiddleware.js"
 
 const router = express.Router()
 
-// Public routes
-router.post("/auth/register", registerUser)
-router.post("/auth/login", loginUser)
+// All routes require authentication and admin privileges
+router.use(protect)
+router.use(adminOnly)
 
-// Protected user routes
-router.get("/profile", protect, getUserProfile)
-router.put("/profile", protect, updateUserProfile)
+// User management routes
+router.route("/").get(validatePagination, getUsers).post(createLimiter, validateUserRegistration, createUser)
 
-// Admin-only user management routes (these match your frontend API calls)
-router.get("/users", protect, admin, getAllUsers)
-router.post("/users", protect, admin, createUser)  // Admin creates user
-router.put("/users/:userId", protect, admin, updateUser)
-router.delete("/users/:userId", protect, admin, deleteUser)
-router.patch("/users/:userId/status", protect, admin, updateUserStatus)
+router.get("/stats", getUserStats)
+
+router
+  .route("/:id")
+  .get(validateObjectId, getUserById)
+  .put(validateObjectId, validateUserUpdate, updateUser)
+  .delete(validateObjectId, deleteUser)
+
+router.patch("/:id/status", validateObjectId, toggleUserStatus)
+router.post("/:id/enroll", validateObjectId, enrollUserInCourse)
 
 export default router

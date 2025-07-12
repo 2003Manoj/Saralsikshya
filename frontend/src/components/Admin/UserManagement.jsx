@@ -1,23 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
-  Filter, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  BookOpen, 
-  Shield,
-  Eye,
-  EyeOff,
-  X,
-  Check,
-  AlertCircle,
-  Loader
-} from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Search, Filter, Mail, Phone, Calendar, BookOpen, Shield, Eye, EyeOff, X, Check, AlertCircle, Loader } from 'lucide-react';
 import styles from './UserManagement.module.css';
 
 const UserManagement = () => {
@@ -38,6 +20,7 @@ const UserManagement = () => {
     total: 0,
     limit: 10
   });
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -47,15 +30,15 @@ const UserManagement = () => {
     isActive: true
   });
 
-  // API Base URL - Update this with your actual backend URL
+  // API Base URL
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  // Get token from localStorage (assuming you store it there after login)
+  // Get token from localStorage
   const getToken = () => {
     return localStorage.getItem('token');
   };
 
-  // API Headers with proper error handling
+  // API Headers
   const getHeaders = () => {
     const token = getToken();
     const headers = {
@@ -69,7 +52,7 @@ const UserManagement = () => {
     return headers;
   };
 
-  // Fetch all users from backend - Updated to match your backend structure
+  // Fetch all users from backend
   const fetchUsers = async (page = 1, search = '') => {
     try {
       setLoading(true);
@@ -82,17 +65,13 @@ const UserManagement = () => {
       queryParams.append('limit', pagination.limit.toString());
 
       const url = `${API_BASE_URL}/users${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-      console.log('Fetching users from:', url); // Debug log
-
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: getHeaders()
       });
-
-      console.log('Response status:', response.status); // Debug log
       
       if (!response.ok) {
-        // Handle different error status codes
         if (response.status === 401) {
           throw new Error('Authentication required. Please login again.');
         } else if (response.status === 403) {
@@ -105,50 +84,21 @@ const UserManagement = () => {
       }
 
       const data = await response.json();
-      console.log('Fetched data:', data); // Debug log
       
-      // Handle different response structures
-      if (data.success !== undefined) {
-        // If response has success field
-        if (data.success) {
-          const usersData = data.users || data.data || [];
-          setUsers(usersData);
-          setPagination(prev => ({
-            ...prev,
-            currentPage: data.currentPage || page,
-            totalPages: data.totalPages || 1,
-            total: data.total || usersData.length
-          }));
-        } else {
-          setError(data.message || 'Failed to fetch users');
-        }
-      } else if (Array.isArray(data)) {
-        // If response is directly an array
-        setUsers(data);
+      if (data.success) {
+        const usersData = data.users || [];
+        setUsers(usersData);
         setPagination(prev => ({
           ...prev,
-          currentPage: page,
-          totalPages: 1,
-          total: data.length
-        }));
-      } else if (data.data && Array.isArray(data.data)) {
-        // If response has data field with array
-        setUsers(data.data);
-        setPagination(prev => ({
-          ...prev,
-          currentPage: data.currentPage || page,
-          totalPages: data.totalPages || 1,
-          total: data.total || data.data.length
+          currentPage: data.pagination?.currentPage || page,
+          totalPages: data.pagination?.totalPages || 1,
+          total: data.pagination?.total || usersData.length
         }));
       } else {
-        console.error('Unexpected response format:', data);
-        setError('Unexpected response format from server');
+        setError(data.message || 'Failed to fetch users');
       }
     } catch (err) {
       setError(err.message || 'Error fetching users');
-      console.error('Fetch users error:', err);
-      
-      // Set empty state on error
       setUsers([]);
       setPagination(prev => ({
         ...prev,
@@ -161,26 +111,25 @@ const UserManagement = () => {
     }
   };
 
-  // Create new user - Updated endpoint
+  // Create new user
   const createUser = async (userData) => {
     try {
       setLoading(true);
       setError('');
-
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      
+      const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(userData)
       });
 
       const data = await response.json();
-      console.log('Create user response:', data); // Debug log
-
+      
       if (!response.ok) {
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (data.success || data.user || data.data) {
+      if (data.success) {
         setSuccess('User created successfully');
         await fetchUsers(pagination.currentPage, searchTerm);
         closeModal();
@@ -189,18 +138,17 @@ const UserManagement = () => {
       }
     } catch (err) {
       setError(err.message || 'Error creating user');
-      console.error('Create user error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Update user - Updated endpoint
+  // Update user
   const updateUser = async (userId, userData) => {
     try {
       setLoading(true);
       setError('');
-
+      
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'PUT',
         headers: getHeaders(),
@@ -208,13 +156,12 @@ const UserManagement = () => {
       });
 
       const data = await response.json();
-      console.log('Update user response:', data); // Debug log
-
+      
       if (!response.ok) {
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (data.success || data.user || data.data) {
+      if (data.success) {
         setSuccess('User updated successfully');
         await fetchUsers(pagination.currentPage, searchTerm);
         closeModal();
@@ -223,31 +170,29 @@ const UserManagement = () => {
       }
     } catch (err) {
       setError(err.message || 'Error updating user');
-      console.error('Update user error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete user - Updated endpoint
+  // Delete user
   const deleteUser = async (userId) => {
     try {
       setLoading(true);
       setError('');
-
+      
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'DELETE',
         headers: getHeaders()
       });
 
       const data = await response.json();
-      console.log('Delete user response:', data); // Debug log
-
+      
       if (!response.ok) {
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (data.success || response.status === 204) {
+      if (data.success) {
         setSuccess('User deleted successfully');
         await fetchUsers(pagination.currentPage, searchTerm);
       } else {
@@ -255,18 +200,17 @@ const UserManagement = () => {
       }
     } catch (err) {
       setError(err.message || 'Error deleting user');
-      console.error('Delete user error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Toggle user status - Updated endpoint
+  // Toggle user status
   const toggleUserStatusAPI = async (userId, isActive) => {
     try {
       setLoading(true);
       setError('');
-
+      
       const response = await fetch(`${API_BASE_URL}/users/${userId}/status`, {
         method: 'PATCH',
         headers: getHeaders(),
@@ -274,13 +218,12 @@ const UserManagement = () => {
       });
 
       const data = await response.json();
-      console.log('Toggle status response:', data); // Debug log
-
+      
       if (!response.ok) {
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (data.success || data.user || data.data) {
+      if (data.success) {
         setSuccess(`User ${isActive ? 'activated' : 'deactivated'} successfully`);
         await fetchUsers(pagination.currentPage, searchTerm);
       } else {
@@ -288,13 +231,12 @@ const UserManagement = () => {
       }
     } catch (err) {
       setError(err.message || 'Error updating user status');
-      console.error('Toggle user status error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial load with better error handling
+  // Initial load
   useEffect(() => {
     const initializeUsers = async () => {
       try {
@@ -311,7 +253,7 @@ const UserManagement = () => {
   useEffect(() => {
     let filtered = users;
     
-    // Frontend filtering for role (since backend may not filter by role)
+    // Frontend filtering for role
     if (filterRole !== 'all') {
       filtered = filtered.filter(user => user.role === filterRole);
     }
@@ -328,7 +270,6 @@ const UserManagement = () => {
         fetchUsers(1, '');
       }
     }, 500);
-
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
@@ -498,23 +439,6 @@ const UserManagement = () => {
       {/* Messages */}
       {error && showMessage(error, 'error')}
       {success && showMessage(success, 'success')}
-
-      {/* Debug Information - Remove in production */}
-      <div style={{ 
-        background: '#f0f0f0', 
-        padding: '10px', 
-        margin: '10px 0', 
-        borderRadius: '5px',
-        fontSize: '12px',
-        color: '#666'
-      }}>
-        <strong>Debug Info:</strong><br />
-        API URL: {API_BASE_URL}<br />
-        Token: {getToken() ? 'Present' : 'Missing'}<br />
-        Users Count: {users.length}<br />
-        Filtered Users: {filteredUsers.length}<br />
-        Loading: {loading ? 'Yes' : 'No'}
-      </div>
 
       {/* Main Content */}
       <div className={styles.mainContent}>
@@ -720,8 +644,8 @@ const UserManagement = () => {
             <div className={styles.modalContent}>
               <div className={styles.modalHeader}>
                 <h2 className={styles.modalTitle}>
-                  {modalMode === 'create' ? 'Add New User' : 
-                   modalMode === 'edit' ? 'Edit User' : 'User Details'}
+                  {modalMode === 'create' ? 'Add New User' :
+                    modalMode === 'edit' ? 'Edit User' : 'User Details'}
                 </h2>
                 <button
                   onClick={closeModal}
@@ -755,7 +679,6 @@ const UserManagement = () => {
                       </span>
                     </div>
                   </div>
-
                   <div className={styles.userDetailInfo}>
                     <div className={styles.contactItem}>
                       <Mail className={styles.contactIcon} />
@@ -770,7 +693,6 @@ const UserManagement = () => {
                       <span>Joined {formatDate(currentUser.createdAt)}</span>
                     </div>
                   </div>
-
                   {currentUser.enrolledCourses && currentUser.enrolledCourses.length > 0 && (
                     <div className={styles.userDetailCourses}>
                       <h4 className={styles.coursesDetailTitle}>Enrolled Courses</h4>
