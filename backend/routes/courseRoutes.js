@@ -10,14 +10,15 @@ import {
   getCourseStats,
   addCourseReview,
   getFeaturedCourses,
+  upload,
 } from "../controllers/admin/courseController.js"
 import { protect, adminOnly } from "../middlewares/authMiddleware.js"
 import { createLimiter } from "../middlewares/securityMiddleware.js"
 import {
-  validateCourseCreation,
-  validateCourseUpdate,
   validateObjectId,
   validatePagination,
+  validateCourseCreationEnhanced,
+  validateCourseUpdateEnhanced,
 } from "../middlewares/validationMiddleware.js"
 
 const router = express.Router()
@@ -32,12 +33,19 @@ router.get("/:id", validateObjectId, getCourseById)
 router.post("/:id/reviews", protect, validateObjectId, addCourseReview)
 
 // Admin only routes
-router.post("/", protect, adminOnly, createLimiter, validateCourseCreation, createCourse)
+router.post(
+  "/",
+  protect,
+  adminOnly,
+  createLimiter,
+  upload.single("courseImage"),
+  validateCourseCreationEnhanced,
+  createCourse,
+)
 router.get("/admin/stats", protect, adminOnly, getCourseStats)
-
 router
   .route("/:id")
-  .put(protect, adminOnly, validateObjectId, validateCourseUpdate, updateCourse)
+  .put(protect, adminOnly, validateObjectId, upload.single("courseImage"), validateCourseUpdateEnhanced, updateCourse)
   .delete(protect, adminOnly, validateObjectId, deleteCourse)
 
 router.patch("/:id/status", protect, adminOnly, validateObjectId, toggleCourseStatus)

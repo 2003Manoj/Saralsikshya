@@ -136,6 +136,11 @@ const courseSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    courseImage: {
+      type: String,
+      trim: true,
+      default: "", // Add default value
+    },
     thumbnail: String,
     rating: {
       type: Number,
@@ -175,6 +180,48 @@ const courseSchema = new mongoose.Schema(
         type: String,
         trim: true,
         maxlength: [100, "Learning outcome cannot exceed 100 characters"],
+      },
+    ],
+    // New fields for overview features
+    overview: {
+      dailyLiveClasses: {
+        type: Boolean,
+        default: false,
+      },
+      freeVideos: {
+        type: Boolean,
+        default: false,
+      },
+      freeNotes: {
+        type: Boolean,
+        default: false,
+      },
+      weeklyClass: {
+        type: Boolean,
+        default: false,
+      },
+      askToGurusFeature: {
+        type: Boolean,
+        default: false,
+      },
+      description: {
+        type: String,
+        maxlength: [500, "Overview description cannot exceed 500 characters"],
+        trim: true,
+      },
+    },
+    curriculum: [
+      {
+        type: String,
+        trim: true,
+        maxlength: [200, "Curriculum item cannot exceed 200 characters"],
+      },
+    ],
+    routine: [
+      {
+        type: String,
+        trim: true,
+        maxlength: [100, "Routine item cannot exceed 100 characters"],
       },
     ],
     enrolledStudents: {
@@ -260,7 +307,6 @@ courseSchema.pre("save", function (next) {
 
   // Update lastUpdated
   this.lastUpdated = new Date()
-
   next()
 })
 
